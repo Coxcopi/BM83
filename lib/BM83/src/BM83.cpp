@@ -1,6 +1,7 @@
 #include "BM83.h"
 #include "cstring"
 #include "driver/uart.h"
+#include "driver/gpio.h"
 #include "esp_log.h"
 
 BM83::BM83()
@@ -11,6 +12,8 @@ BM83::BM83()
 
 bool BM83::begin(gpio_num_t pin_rx, gpio_num_t pin_tx, gpio_num_t pin_mfb, uint32_t baud_rate)
 {
+    this->pin_mfb = pin_mfb;
+
     uart_config_t config = {
         .baud_rate = 115200,
         .data_bits = UART_DATA_8_BITS,
@@ -51,6 +54,19 @@ bool BM83::begin(gpio_num_t pin_rx, gpio_num_t pin_tx, gpio_num_t pin_mfb, uint3
             5,
             nullptr) != pdPASS)
         return false;
+
+    if (pin_mfb != GPIO_NUM_NC)
+    {
+        gpio_config_t io_conf = {};
+        io_conf.pin_bit_mask = (1ULL << pin_mfb);
+        io_conf.mode = GPIO_MODE_OUTPUT;
+        io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+        io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+        io_conf.intr_type = GPIO_INTR_DISABLE;
+
+        if (gpio_config(&io_conf) != ESP_OK)
+            return false;
+    }
 
     return true;
 }
@@ -141,7 +157,18 @@ void BM83::queue_process_task()
         bm83_cmd *cmd;
         xQueueReceive(cmd_queue, &cmd, portMAX_DELAY);
         current_command = cmd;
+        // see https://ww1.microchip.com/downloads/aemDocuments/documents/OTH/ProductDocuments/UserGuides/BM83_Host_MCU_Firmware_Development_Guide_DS50002896A.pdf#_OPENTOPIC_TOC_PROCESSING_d136e5350
+        if (pin_mfb != GPIO_NUM_NC)
+        {
+            gpio_set_level(pin_mfb, 1);
+            vTaskDelay(pdMS_TO_TICKS(3));
+        }
         uart_write_bytes(uart_port, cmd->tx_data, cmd->tx_len);
+        if (pin_mfb != GPIO_NUM_NC)
+        {
+            uart_wait_tx_done(uart_port, pdMS_TO_TICKS(100));
+            gpio_set_level(pin_mfb, 0);
+        }
     }
 }
 

@@ -49,12 +49,14 @@ class BM83
 {
 public:
     BM83();
-    bool begin(gpio_num_t pin_rx, gpio_num_t pin_tx, gpio_num_t pin_mfb, uint32_t baud_rate = 115200);
+    bool begin(gpio_num_t pin_rx, gpio_num_t pin_tx, gpio_num_t pin_mfb = GPIO_NUM_NC, uint32_t baud_rate = 115200);
     void send(uint8_t opcode, uint8_t *params = nullptr, uint16_t params_length = 0);
 
 private:
     QueueHandle_t cmd_queue;
     uart_port_t uart_port = UART_NUM_1;
+
+    gpio_num_t pin_mfb;
 
     bm83_cmd *current_command = nullptr;
 
