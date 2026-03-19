@@ -6,7 +6,7 @@
 BM83::BM83()
 {
     esp_log_level_set("*", ESP_LOG_INFO);
-    cmd_queue = xQueueCreate(BM83_CMD_QUEUE_SIZE, sizeof(bm83_cmd*));
+    cmd_queue = xQueueCreate(BM83_CMD_QUEUE_SIZE, sizeof(bm83_cmd *));
 }
 
 bool BM83::begin(gpio_num_t pin_rx, gpio_num_t pin_tx, gpio_num_t pin_mfb, uint32_t baud_rate)
@@ -17,40 +17,41 @@ bool BM83::begin(gpio_num_t pin_rx, gpio_num_t pin_tx, gpio_num_t pin_mfb, uint3
         .parity = UART_PARITY_DISABLE,
         .stop_bits = UART_STOP_BITS_1,
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-        .source_clk = UART_SCLK_APB
-    };
+        .source_clk = UART_SCLK_APB};
 
-    uart_param_config(uart_port, &config);
+    if (uart_param_config(uart_port, &config) != ESP_OK)
+        return false;
 
-    uart_set_pin(
-        uart_port,
-        pin_tx,
-        pin_rx,
-        UART_PIN_NO_CHANGE,
-        UART_PIN_NO_CHANGE
-    );
+    if (
+        uart_set_pin(
+            uart_port,
+            pin_tx,
+            pin_rx,
+            UART_PIN_NO_CHANGE,
+            UART_PIN_NO_CHANGE) != ESP_OK)
+        return false;
 
-    uart_driver_install(uart_port, 1024, 1024, 0, NULL, 0);
+    if (uart_driver_install(uart_port, 1024, 1024, 0, NULL, 0) != ESP_OK)
+        return false;
 
-    xTaskCreate(
-        queue_process_task_wrapper,
-        "BM83QueueProcessTask",
-        4096,
-        this,
-        5,
-        nullptr
-    );
+    if (xTaskCreate(
+            queue_process_task_wrapper,
+            "BM83QueueProcessTask",
+            4096,
+            this,
+            5,
+            nullptr) != pdPASS)
+        return false;
 
-    xTaskCreate(
-        rx_task_wrapper,
-        "BM83UartRxTask",
-        4096,
-        this,
-        5,
-        nullptr
-    );
+    if (xTaskCreate(
+            rx_task_wrapper,
+            "BM83UartRxTask",
+            4096,
+            this,
+            5,
+            nullptr) != pdPASS)
+        return false;
 
-    // FIXME
     return true;
 }
 
@@ -83,10 +84,12 @@ void BM83::init_uart(gpio_num_t pin_rx, gpio_num_t pin_tx)
 
 uint16_t BM83::build_packet(uint8_t opcode, uint8_t *params, uint16_t params_length, uint8_t *packet)
 {
-    if (params_length == UINT16_MAX) {
+    if (params_length == UINT16_MAX)
+    {
         // TODO: Log err and abort
     }
-    if (!params) {
+    if (!params)
+    {
         params_length = 0;
     }
     uint16_t len = 1 + params_length;
@@ -97,7 +100,8 @@ uint16_t BM83::build_packet(uint8_t opcode, uint8_t *params, uint16_t params_len
     packet[1] = len_h;
     packet[2] = len_l;
     packet[3] = opcode;
-    if (params && params_length > 0) {
+    if (params && params_length > 0)
+    {
         std::memcpy(packet + 4, params, params_length);
     }
     packet[len_total - 1] = calc_checksum(packet, len_total);
@@ -108,7 +112,8 @@ uint8_t BM83::calc_checksum(uint8_t *packet, size_t len_total)
 {
     uint8_t checksum = 0;
     // ignore start byte and ignore last byte (= checksum byte)
-    for (uint8_t i = 1; i < len_total - 1; i++) {
+    for (uint8_t i = 1; i < len_total - 1; i++)
+    {
         checksum += packet[i];
     }
     return (~checksum) + 1;
@@ -124,13 +129,14 @@ bm83_cmd BM83::build_cmd(uint8_t *packet, uint16_t packet_len)
 
 void BM83::queue_process_task_wrapper(void *arg)
 {
-    auto bm83 = static_cast<BM83*>(arg);
+    auto bm83 = static_cast<BM83 *>(arg);
     bm83->queue_process_task();
 }
 
 void BM83::queue_process_task()
 {
-    while(true) {
+    while (true)
+    {
 
         bm83_cmd *cmd;
         xQueueReceive(cmd_queue, &cmd, portMAX_DELAY);
@@ -141,7 +147,7 @@ void BM83::queue_process_task()
 
 void BM83::rx_task_wrapper(void *arg)
 {
-    auto bm83 = static_cast<BM83*>(arg);
+    auto bm83 = static_cast<BM83 *>(arg);
     bm83->rx_task();
 }
 
@@ -158,7 +164,6 @@ void BM83::rx_task()
             ESP_LOGE("BM83", "Discarding packet due to invalid header");
             continue;
         }
-
 
         uint16_t len_payload = (packet[1] << 8) | packet[2];
 
@@ -186,7 +191,7 @@ void BM83::rx_task()
             ESP_LOGE("BM83", "Discarding packet (checksums don't match)");
             continue;
         }
-    
+
         if (current_command)
         {
             // TODO: Check if the packet is actually the correct response to current_command
@@ -194,7 +199,8 @@ void BM83::rx_task()
             current_command->rx_len = len_total;
             memcpy(current_command->rx_data, packet, len_total);
             xSemaphoreGive(current_command->done_sem);
-        } else // no current command, must be a random event
+        }
+        else // no current command, must be a random event
         {
             ESP_LOGE("BM83", "--- Random event received: ---");
             ESP_LOGE("BM83", "Packet length: %d", len_total);
@@ -257,11 +263,13 @@ void BM83::clear_current_cmd()
 //     return true;
 // }
 
-void BM83::buf_to_hex_string(const uint8_t* buf, size_t len, char* out, size_t out_size)
+void BM83::buf_to_hex_string(const uint8_t *buf, size_t len, char *out, size_t out_size)
 {
     size_t pos = 0;
-    for (size_t i = 0; i < len && pos + 3 < out_size; i++) {
+    for (size_t i = 0; i < len && pos + 3 < out_size; i++)
+    {
         pos += snprintf(out + pos, out_size - pos, "%02X ", buf[i]);
     }
-    if (pos > 0 && pos < out_size) out[pos-1] = '\0'; // remove last space
+    if (pos > 0 && pos < out_size)
+        out[pos - 1] = '\0'; // remove last space
 }
