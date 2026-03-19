@@ -9,17 +9,13 @@
 
 static_assert(std::endian::native == std::endian::little);
 
-// TODO: Use correct timeout from bm83 uart specs
-constexpr time_t BM83_CMD_TIMEOUT_MS = 100;
+constexpr time_t BM83_CMD_TIMEOUT_MS = 200;
 // ~ 10 kB with a full queue
 constexpr size_t BM83_CMD_QUEUE_SIZE = 8;
 // might need adjustment
 constexpr size_t BM83_MAX_TX_PACKET_LENGTH = 64;
 // might need adjustment
 constexpr size_t BM83_MAX_RX_PACKET_LENGTH = 1024;
-// Used to avoid heap fragmentation for small packages.
-// TODO: Could probably be smaller.
-constexpr size_t BM83_PACKET_BUFFER_SIZE = 32;
 
 constexpr uint8_t BM83_CMD_START_BYTE = 0xAA;
 
